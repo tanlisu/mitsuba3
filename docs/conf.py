@@ -339,7 +339,8 @@ html_theme_options = {
         # Code blocks
         'color-code-foreground': 'black',
         'color-code-background': '#f8f9fb',
-    }
+    },
+    "top_of_page_button": None,
 }
 # Force pygments style in dark mode back to the light variant
 pygments_dark_style = 'tango'
