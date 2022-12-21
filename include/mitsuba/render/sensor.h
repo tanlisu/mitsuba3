@@ -109,11 +109,25 @@ public:
     /// Does the sampling technique require a sample for the aperture position?
     bool needs_aperture_sample() const { return m_needs_sample_3; }
 
+    /// Does the sensor capture a transient image sequence?
+    bool is_transient() const { return m_transient; }
+
+    /// Return the number of transient images for this sensor
+    int num_films() const { return m_num_films; }
+
     /// Return the \ref Film instance associated with this sensor
     Film *film() { return m_film; }
 
     /// Return the \ref Film instance associated with this sensor (const)
     const Film *film() const { return m_film.get(); }
+
+    /// Return the \ref Film instance associated with this sensor's ith transient time range (const)
+    const Film *film(int i) const {
+        if (m_transient && i >= 0 && i < m_num_films) {
+            return m_films[i].get();
+        }
+        return nullptr;
+    }
 
     /**
      * \brief Return the sensor's sample generator
@@ -167,6 +181,9 @@ protected:
     ScalarFloat m_shutter_open_time;
     ref<const Texture> m_srf;
     bool m_alpha;
+    bool m_transient;
+    int m_num_films;
+    std::vector<ref<Film>> m_films;
 };
 
 //! @}

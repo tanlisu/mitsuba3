@@ -2763,6 +2763,8 @@ static const char *__doc_mitsuba_Film_crop_size = R"doc(Return the size of the c
 
 static const char *__doc_mitsuba_Film_develop = R"doc(Return a image buffer object storing the developed image)doc";
 
+static const char *__doc_mitsuba_Film_develop_transient = R"doc(Return an image buffer object storing the developed transient image)doc";
+
 static const char *__doc_mitsuba_Film_flags = R"doc(Flags for all properties combined.)doc";
 
 static const char *__doc_mitsuba_Film_m_crop_offset = R"doc()doc";
@@ -2818,6 +2820,10 @@ Parameter ``active``:
 
 static const char *__doc_mitsuba_Film_put_block =
 R"doc(Merge an image block into the film. This methods should be thread-
+safe.)doc";
+
+static const char *__doc_mitsuba_Film_put_block_transient =
+R"doc(Merge an image block into the transient film. This method should be thread-
 safe.)doc";
 
 static const char *__doc_mitsuba_Film_rfilter = R"doc(Return the image reconstruction filter (const version))doc";
@@ -6603,9 +6609,17 @@ static const char *__doc_mitsuba_Sensor_film = R"doc(Return the Film instance as
 
 static const char *__doc_mitsuba_Sensor_film_2 = R"doc(Return the Film instance associated with this sensor (const))doc";
 
+static const char *__doc_mitsuba_Sensor_film_3 = R"doc(Return the \ref Film instance associated with this sensor's ith transient time range (const))doc";
+
+static const char *__doc_mitsuba_Sensor_is_transient = R"doc(Does the sensor capture a transient image sequence?)doc";
+
 static const char *__doc_mitsuba_Sensor_m_alpha = R"doc()doc";
 
 static const char *__doc_mitsuba_Sensor_m_film = R"doc()doc";
+
+static const char *__doc_mitsuba_Sensor_m_films = R"doc()doc";
+
+static const char *__doc_mitsuba_Sensor_m_num_films = R"doc()doc";
 
 static const char *__doc_mitsuba_Sensor_m_resolution = R"doc()doc";
 
@@ -6616,6 +6630,10 @@ static const char *__doc_mitsuba_Sensor_m_shutter_open = R"doc()doc";
 static const char *__doc_mitsuba_Sensor_m_shutter_open_time = R"doc()doc";
 
 static const char *__doc_mitsuba_Sensor_m_srf = R"doc()doc";
+
+static const char *__doc_mitsuba_Sensor_m_transient = R"doc()doc";
+
+static const char *__doc_mitsuba_Sensor_num_films = R"doc(Return the number of transient images for this sensor)doc";
 
 static const char *__doc_mitsuba_Sensor_needs_aperture_sample =
 R"doc(Does the sampling technique require a sample for the aperture

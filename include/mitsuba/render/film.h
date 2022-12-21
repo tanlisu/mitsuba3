@@ -60,8 +60,14 @@ public:
     /// Merge an image block into the film. This methods should be thread-safe.
     virtual void put_block(const ImageBlock *block) = 0;
 
+    /// Merge an image block into the transient film. This method should be thread-safe.
+    virtual void put_block_transient(const ImageBlock *block, const int i) = 0;
+
     /// Return a image buffer object storing the developed image
     virtual TensorXf develop(bool raw = false) const = 0;
+
+    /// Return an image buffer object storing the developed transient image
+    virtual TensorXf develop_transient(const int i, bool raw = false) const = 0;
 
     /// Return a bitmap object storing the developed contents of the film
     virtual ref<Bitmap> bitmap(bool raw = false) const = 0;

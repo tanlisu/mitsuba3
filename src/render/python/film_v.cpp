@@ -22,8 +22,16 @@ public:
         PYBIND11_OVERRIDE_PURE(void, Film, put_block, block);
     }
 
+    void put_block_transient(const ImageBlock *block, const int i) override {
+        PYBIND11_OVERRIDE_PURE(void, Film, put_block, block, i);
+    }
+
     TensorXf develop(bool raw = false) const override {
         PYBIND11_OVERRIDE_PURE(TensorXf, Film, develop, raw);
+    }
+
+    TensorXf develop_transient(const int i, bool raw = false) const override {
+        PYBIND11_OVERRIDE_PURE(TensorXf, Film, develop, i, raw);
     }
 
     ref<Bitmap> bitmap(bool raw = false) const override {
@@ -75,7 +83,9 @@ MI_PY_EXPORT(Film) {
     py::class_<Film, PyFilm, Object, ref<Film>>(m, "Film", D(Film))
         .def_method(Film, prepare, "aovs"_a)
         .def_method(Film, put_block, "block"_a)
+        .def_method(Film, put_block_transient, "block"_a, "i"_a)
         .def_method(Film, develop, "raw"_a = false)
+        .def_method(Film, develop_transient, "i"_a, "raw"_a = false)
         .def_method(Film, bitmap, "raw"_a = false)
         .def_method(Film, write, "path"_a)
         .def_method(Film, sample_border)

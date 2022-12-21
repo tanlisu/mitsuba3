@@ -14,10 +14,23 @@ NAMESPACE_BEGIN(mitsuba)
 MI_VARIANT Sensor<Float, Spectrum>::Sensor(const Properties &props) : Base(props) {
     m_shutter_open      = props.get<ScalarFloat>("shutter_open", 0.f);
     m_shutter_open_time = props.get<ScalarFloat>("shutter_close", 0.f) - m_shutter_open;
+    m_transient         = props.get<bool>("transient", false);
+    m_num_films        = props.get<int>("num_films", 1);
 
     if (m_shutter_open_time < 0)
         Throw("Shutter opening time must be less than or equal to the shutter "
               "closing time!");
+
+    if (m_transient) {
+        for (int i=0; i < m_num_films; i++) {
+            for (auto &[name, obj] : props.objects(false)) {
+                auto *film_i = dynamic_cast<Film *>(obj.get());
+                if (film_i) {
+                    m_films.push_back(film_i);
+                }
+            }
+        }
+    }
 
     for (auto &[name, obj] : props.objects(false)) {
         auto *film = dynamic_cast<Film *>(obj.get());

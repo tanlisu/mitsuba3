@@ -223,6 +223,7 @@ public:
                                        (uint32_t) channels.size());
             m_channels = channels;
         }
+        m_storage_transient = std::vector<ref<ImageBlock>>();
 
         std::sort(channels.begin(), channels.end());
         auto it = std::unique(channels.begin(), channels.end());
@@ -255,6 +256,13 @@ public:
         m_storage->put_block(block);
     }
 
+    void put_block_transient(const ImageBlock *block, const int i) override {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_storage_transient.push_back(new ImageBlock(m_crop_size, m_crop_offset, (uint32_t) m_channels.size()));
+        Assert(m_storage_transient[i] != nullptr);
+        m_storage_transient[i]->put_block(block);
+    }
+
     TensorXf develop(bool raw = false) const override {
         if (!m_storage)
             Throw("No storage allocated, was prepare() called first?");
@@ -276,6 +284,122 @@ public:
                 size        = m_storage->size();
                 source_ch   = (uint32_t) m_storage->channel_count();
                 pixel_count = dr::prod(m_storage->size());
+            }
+
+            /* The following code develops weighted image block data into
+               an output image of the desired configuration, while using
+               a minimal number of JIT kernel launches. */
+
+            // Determine what channels are needed
+            bool to_xyz    = m_pixel_format == Bitmap::PixelFormat::XYZ ||
+                             m_pixel_format == Bitmap::PixelFormat::XYZA;
+            bool to_y      = m_pixel_format == Bitmap::PixelFormat::Y ||
+                             m_pixel_format == Bitmap::PixelFormat::YA;
+
+            // Number of arbitrary output variables (AOVs)
+            bool alpha = has_flag(m_flags, FilmFlags::Alpha);
+            uint32_t base_ch = alpha ? 5 : 4,
+                     aovs    = source_ch - base_ch;
+
+            /// Number of desired color components
+            uint32_t color_ch = to_y ? 1 : 3;
+
+            // Number of channels of the target tensor
+            uint32_t target_ch = color_ch + aovs + (uint32_t) alpha;
+
+            // Index vectors referencing pixels & channels of the output image
+            UInt32 idx         = dr::arange<UInt32>(pixel_count * target_ch),
+                   pixel_idx   = idx / target_ch,
+                   channel_idx = dr::fmadd(pixel_idx, uint32_t(-(int) target_ch), idx);
+
+            /* Index vectors referencing source pixels/weights as follows:
+                 values_idx = R1, G1, B1, R2, G2, B2 (for RGB output)
+                 weight_idx = W1, W1, W1, W2, W2, W2 */
+            UInt32 values_idx = dr::fmadd(pixel_idx, source_ch, channel_idx),
+                   weight_idx = dr::fmadd(pixel_idx, source_ch, base_ch - 1);
+
+            // If AOVs are desired, their indices in 'values_idx' must be shifted
+            if (aovs) {
+                // Index of first AOV channel in output image
+                uint32_t first_aov = color_ch + (uint32_t) alpha;
+                values_idx[channel_idx >= first_aov] += base_ch - first_aov;
+            }
+
+            // If luminance + alpha, shift alpha channel to skip the GB channels
+            if (alpha && to_y)
+                values_idx[dr::eq(channel_idx, color_ch /* alpha */)] += 2;
+
+            Mask value_mask = true;
+
+            // XYZ/Y mode: don't gather color, will be computed below
+            if (to_xyz || to_y)
+                value_mask = values_idx >= color_ch;
+
+            // Gather the pixel values from the image data buffer
+            Float weight = dr::gather<Float>(data, weight_idx),
+                  values = dr::gather<Float>(data, values_idx, value_mask);
+
+            // Fill color channels with XYZ/Y data if requested
+            if (to_xyz || to_y) {
+                UInt32 in_idx  = dr::arange<UInt32>(pixel_count) * source_ch,
+                       out_idx = dr::arange<UInt32>(pixel_count) * target_ch;
+
+                Color3f rgb = Color3f(dr::gather<Float>(data, in_idx),
+                                      dr::gather<Float>(data, in_idx + 1),
+                                      dr::gather<Float>(data, in_idx + 2));
+
+                if (to_y) {
+                    dr::scatter(values, luminance(rgb), out_idx);
+                } else {
+                    Color3f xyz = srgb_to_xyz(rgb);
+                    dr::scatter(values, xyz[0], out_idx);
+                    dr::scatter(values, xyz[1], out_idx + 1);
+                    dr::scatter(values, xyz[2], out_idx + 2);
+                }
+            }
+
+            // Perform the weight division unless the weight is zero
+            values /= dr::select(dr::eq(weight, 0.f), 1.f, weight);
+
+            size_t shape[3] = { (size_t) size.y(), (size_t) size.x(),
+                                target_ch };
+
+            return TensorXf(values, 3, shape);
+        } else {
+            ref<Bitmap> source = bitmap();
+            ScalarVector2i size = source->size();
+            size_t width = source->channel_count() * dr::prod(size);
+            auto data = dr::load<DynamicBuffer<ScalarFloat>>(source->data(), width);
+
+            size_t shape[3] = { (size_t) source->height(),
+                                (size_t) source->width(),
+                                source->channel_count() };
+
+            return TensorXf(data, 3, shape);
+        }
+    }
+
+    TensorXf develop_transient(const int i, bool raw = false) const override {
+        if (!m_storage_transient[i])
+            Throw("No storage allocated, was prepare() called first?");
+
+        if (raw) {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_storage_transient[i]->tensor();
+        }
+
+        if constexpr (dr::is_jit_v<Float>) {
+            Float data;
+            uint32_t source_ch;
+            uint32_t pixel_count;
+            ScalarVector2i size;
+
+            /* locked */ {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                data        = m_storage_transient[i]->tensor().array();
+                size        = m_storage_transient[i]->size();
+                source_ch   = (uint32_t) m_storage_transient[i]->channel_count();
+                pixel_count = dr::prod(m_storage_transient[i]->size());
             }
 
             /* The following code develops weighted image block data into
@@ -563,6 +687,8 @@ protected:
     Bitmap::PixelFormat m_pixel_format;
     Struct::Type m_component_format;
     ref<ImageBlock> m_storage;
+    std::vector<ref<ImageBlock>> m_storage_transient;
+    int m_num_images;
     mutable std::mutex m_mutex;
     std::vector<std::string> m_channels;
 };

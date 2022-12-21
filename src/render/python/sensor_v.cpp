@@ -66,7 +66,10 @@ MI_PY_EXPORT(Sensor) {
         .def_method(Sensor, shutter_open)
         .def_method(Sensor, shutter_open_time)
         .def_method(Sensor, needs_aperture_sample)
+        .def_method(Sensor, is_transient)
+        .def_method(Sensor, num_films)
         .def("film", py::overload_cast<>(&Sensor::film, py::const_), D(Sensor, film))
+        .def("film", py::overload_cast<int>(&Sensor::film, py::const_), D(Sensor, film))
         .def("sampler", py::overload_cast<>(&Sensor::sampler, py::const_), D(Sensor, sampler))
         .def_readwrite("m_needs_sample_2", &PySensor::m_needs_sample_2)
         .def_readwrite("m_needs_sample_3", &PySensor::m_needs_sample_3);
